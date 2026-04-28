@@ -1,0 +1,238 @@
+/* ============================================================
+   GOOGLE APPS SCRIPT — VENDOR REGISTRATION BACKEND
+   ============================================================
+   SETUP STEPS:
+   1. Open Google Sheets → create a new sheet named "Vendors"
+   2. Go to Extensions → Apps Script
+   3. Paste this entire file, replacing any existing code
+   4. Replace SPREADSHEET_ID and DRIVE_FOLDER_ID below
+   5. Save → Deploy → New deployment → Web App
+      • Execute as: Me
+      • Who has access: Anyone
+   6. Copy the Web App URL → paste into js/script.js
+   ============================================================ */
+
+// ── CONFIGURATION ────────────────────────────────────────────
+const SPREADSHEET_ID = "YOUR_GOOGLE_SPREADSHEET_ID_HERE";
+const DRIVE_FOLDER_ID = "YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE";
+// ─────────────────────────────────────────────────────────────
+
+const SHEET_NAME = "Vendors";
+
+const HEADERS = [
+  "Reference ID",
+  "Submitted At",
+  "Status",
+  // Company
+  "Company Name",
+  "Business Type",
+  "Registration No",
+  "GST Number",
+  "PAN Number",
+  "Year Established",
+  "Website",
+  // Contact
+  "Contact Name",
+  "Designation",
+  "Email",
+  "Phone",
+  "Alt Phone",
+  "Address Line 1",
+  "Address Line 2",
+  "City",
+  "State",
+  "PIN Code",
+  "Country",
+  // Business
+  "Business Nature",
+  "Categories",
+  "Annual Turnover",
+  "Employees",
+  "Certifications",
+  "Vendor Category",
+  // Bank
+  "Bank Name",
+  "Account Holder",
+  "Account Number",
+  "IFSC Code",
+  "Branch Name",
+  "Account Type",
+  // Documents (Drive links)
+  "Business Registration (Link)",
+  "Tax Document (Link)",
+  "Cancelled Cheque (Link)",
+];
+
+
+/* ============================================================
+   MAIN HANDLER — receives POST from the website form
+   ============================================================ */
+function doPost(e) {
+  try {
+    const raw  = e.postData ? e.postData.contents : "{}";
+    const data = JSON.parse(raw);
+
+    /* ── Open sheet ── */
+    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let   sheet = ss.getSheetByName(SHEET_NAME);
+
+    /* ── Create sheet + headers if it doesn't exist ── */
+    if (!sheet) {
+      sheet = ss.insertSheet(SHEET_NAME);
+      writeHeaders(sheet);
+    } else if (sheet.getLastRow() === 0) {
+      writeHeaders(sheet);
+    }
+
+    /* ── Upload files to Drive ── */
+    const folder      = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    const refId       = data.referenceId || generateRefId();
+    const subFolder   = folder.createFolder(refId + " — " + (data.companyName || "Unknown"));
+
+    const bizRegLink  = saveFileToDrive(subFolder, data.files && data.files.businessRegistration, "Business_Registration");
+    const taxDocLink  = saveFileToDrive(subFolder, data.files && data.files.taxDocument,          "Tax_Document");
+    const chequeLink  = saveFileToDrive(subFolder, data.files && data.files.cancelledCheque,      "Cancelled_Cheque");
+
+    /* ── Build row ── */
+    const row = [
+      refId,
+      data.submittedAt || new Date().toISOString(),
+      "Pending Review",
+      // Company
+      data.companyName        || "",
+      data.businessType       || "",
+      data.registrationNo     || "",
+      data.gstNumber          || "",
+      data.panNumber          || "",
+      data.yearEstablished    || "",
+      data.website            || "",
+      // Contact
+      data.contactName        || "",
+      data.designation        || "",
+      data.email              || "",
+      data.phone              || "",
+      data.altPhone           || "",
+      data.address1           || "",
+      data.address2           || "",
+      data.city               || "",
+      data.state              || "",
+      data.pinCode            || "",
+      data.country            || "",
+      // Business
+      data.businessNature     || "",
+      data.categories         || "",
+      data.annualTurnover     || "",
+      data.employees          || "",
+      data.certifications     || "",
+      data.vendorCategory     || "",
+      // Bank
+      data.bankName           || "",
+      data.accountHolder      || "",
+      data.accountNumber      || "",
+      data.ifscCode           || "",
+      data.branchName         || "",
+      data.accountType        || "",
+      // Document links
+      bizRegLink,
+      taxDocLink,
+      chequeLink,
+    ];
+
+    sheet.appendRow(row);
+
+    /* ── Auto-format headers on first data row ── */
+    if (sheet.getLastRow() === 2) {
+      formatHeaders(sheet);
+    }
+
+    /* ── Send acknowledgement email to vendor ── */
+    if (data.email) {
+      sendAcknowledgement(data.email, data.contactName || data.companyName, refId);
+    }
+
+    return jsonResponse({ status: "success", referenceId: refId });
+
+  } catch (err) {
+    Logger.log("ERROR: " + err.message + "\n" + err.stack);
+    return jsonResponse({ status: "error", message: err.message });
+  }
+}
+
+
+/* ============================================================
+   SAVE FILE TO GOOGLE DRIVE
+   ============================================================ */
+function saveFileToDrive(folder, fileObj, label) {
+  if (!fileObj || !fileObj.base64 || !fileObj.name) return "Not uploaded";
+
+  try {
+    const decoded   = Utilities.base64Decode(fileObj.base64);
+    const blob      = Utilities.newBlob(decoded, fileObj.type || "application/octet-stream", fileObj.name);
+    const driveFile = folder.createFile(blob);
+    driveFile.setName(label + "_" + fileObj.name);
+    driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return driveFile.getUrl();
+  } catch (err) {
+    Logger.log("File upload error (" + label + "): " + err.message);
+    return "Upload failed";
+  }
+}
+
+
+/* ============================================================
+   WRITE HEADER ROW
+   ============================================================ */
+function writeHeaders(sheet) {
+  sheet.appendRow(HEADERS);
+  formatHeaders(sheet);
+}
+
+function formatHeaders(sheet) {
+  const headerRange = sheet.getRange(1, 1, 1, HEADERS.length);
+  headerRange.setBackground("#1a56db");
+  headerRange.setFontColor("#ffffff");
+  headerRange.setFontWeight("bold");
+  headerRange.setFontSize(11);
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, HEADERS.length);
+}
+
+
+/* ============================================================
+   SEND ACKNOWLEDGEMENT EMAIL
+   ============================================================ */
+function sendAcknowledgement(email, name, refId) {
+  const subject = "Vendor Registration Received — " + refId;
+  const body = `Dear ${name},\n\nThank you for submitting your vendor registration application.\n\nYour Reference ID: ${refId}\n\nOur team will review your application and documents within 3–5 business days. You will receive a follow-up email once the review is complete.\n\nIf you have any questions, please contact us with your Reference ID.\n\nBest regards,\nVendor Management Team`;
+
+  try {
+    MailApp.sendEmail(email, subject, body);
+  } catch (err) {
+    Logger.log("Email send failed: " + err.message);
+  }
+}
+
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function generateRefId() {
+  return "VND-" + new Date().getTime().toString(36).toUpperCase() + "-" + Math.random().toString(36).substring(2,6).toUpperCase();
+}
+
+function jsonResponse(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+
+/* ============================================================
+   TEST FUNCTION (run manually from Apps Script editor)
+   ============================================================ */
+function testSetup() {
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
+  writeHeaders(sheet);
+  Logger.log("✅ Setup complete. Headers written to sheet: " + SHEET_NAME);
+}
