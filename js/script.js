@@ -5,7 +5,7 @@
        with your deployed Google Apps Script Web App URL.
    ============================================================ */
 
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwgsao3SCgqiQ3LI2ZT7CoClzyevjzpobtHmzk28dYdGzA9jcz-Zc-UUBVZzgSlQsM/exec";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz0tVyhpB6HRBj-kIMYFR9c9exxPwypuSA8l9yQsAIyPe1j0v9Uac3XRfzvN5z7a0_A/exec";
 
 /* ── FILE STORAGE (base64 encoded) ── */
 const uploadedFiles = {
