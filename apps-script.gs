@@ -13,8 +13,8 @@
    ============================================================ */
 
 // ── CONFIGURATION ────────────────────────────────────────────
-const SPREADSHEET_ID = "YOUR_GOOGLE_SPREADSHEET_ID_HERE";
-const DRIVE_FOLDER_ID = "YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE";
+const SPREADSHEET_ID = "1CGHew6hLR_5mPYObRPCQ-VS0vsjk03cO1wdwo_o8pOc";
+const DRIVE_FOLDER_ID = "1iDmUKlCbYC8Objz1PBEeX80V8BUc8L3h";
 // ─────────────────────────────────────────────────────────────
 
 const SHEET_NAME = "Vendors";
@@ -228,7 +228,137 @@ function jsonResponse(obj) {
 
 
 /* ============================================================
-   TEST FUNCTION (run manually from Apps Script editor)
+   DIAGNOSTIC — run this first to check your configuration
+   ============================================================ */
+function checkConfig() {
+  Logger.log("=== VMS DIAGNOSTIC ===");
+
+  // 1. Check IDs are filled in
+  if (SPREADSHEET_ID === "YOUR_GOOGLE_SPREADSHEET_ID_HERE") {
+    Logger.log("❌ SPREADSHEET_ID is not set! Open this script and replace the placeholder.");
+    return;
+  }
+  if (DRIVE_FOLDER_ID === "YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE") {
+    Logger.log("❌ DRIVE_FOLDER_ID is not set! Open this script and replace the placeholder.");
+    return;
+  }
+  Logger.log("✅ IDs are filled in.");
+
+  // 2. Check Google Sheet access
+  try {
+    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    Logger.log("✅ Google Sheet found: " + ss.getName());
+    let sheet = ss.getSheetByName(SHEET_NAME);
+    if (!sheet) {
+      sheet = ss.insertSheet(SHEET_NAME);
+      Logger.log("✅ Created 'Vendors' sheet.");
+    } else {
+      Logger.log("✅ 'Vendors' sheet exists. Rows: " + sheet.getLastRow());
+    }
+    writeHeaders(sheet);
+    Logger.log("✅ Headers written successfully.");
+  } catch (err) {
+    Logger.log("❌ Sheet error: " + err.message);
+    Logger.log("   → Check that SPREADSHEET_ID is correct.");
+    return;
+  }
+
+  // 3. Check Google Drive folder access
+  try {
+    const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    Logger.log("✅ Drive folder found: " + folder.getName());
+  } catch (err) {
+    Logger.log("❌ Drive folder error: " + err.message);
+    Logger.log("   → Check that DRIVE_FOLDER_ID is correct.");
+    return;
+  }
+
+  Logger.log("=== ALL CHECKS PASSED ✅ ===");
+  Logger.log("Now run testPost() to simulate a form submission.");
+}
+
+
+/* ============================================================
+   TEST SUBMISSION — simulates a real form POST
+   ============================================================ */
+function testPost() {
+  const fakeData = {
+    referenceId:     "VND-TEST-0001",
+    submittedAt:     new Date().toISOString(),
+    companyName:     "Test Company Pvt Ltd",
+    businessType:    "Private Limited",
+    registrationNo:  "U12345MH2020PTC123456",
+    gstNumber:       "27AABCT1332L1ZV",
+    panNumber:       "AABCT1332L",
+    yearEstablished: "2020",
+    website:         "https://testcompany.com",
+    contactName:     "Test Person",
+    designation:     "Manager",
+    email:           Session.getActiveUser().getEmail(),
+    phone:           "9876543210",
+    altPhone:        "",
+    address1:        "123 Test Street",
+    address2:        "Suite 1",
+    city:            "Mumbai",
+    state:           "Maharashtra",
+    pinCode:         "400001",
+    country:         "India",
+    businessNature:  "IT Services and Software Development",
+    categories:      "Software, Consulting",
+    annualTurnover:  "₹1 – 5 Crores",
+    employees:       "11 – 50",
+    certifications:  "ISO 9001",
+    vendorCategory:  "Service Provider",
+    bankName:        "State Bank of India",
+    accountHolder:   "Test Company Pvt Ltd",
+    accountNumber:   "123456789012",
+    ifscCode:        "SBIN0001234",
+    branchName:      "Fort Branch",
+    accountType:     "Current",
+    files: {
+      businessRegistration: null,
+      taxDocument:          null,
+      cancelledCheque:      null,
+    },
+  };
+
+  // Simulate doPost
+  try {
+    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let   sheet = ss.getSheetByName(SHEET_NAME);
+    if (!sheet) { sheet = ss.insertSheet(SHEET_NAME); writeHeaders(sheet); }
+    else if (sheet.getLastRow() === 0) { writeHeaders(sheet); }
+
+    const folder    = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    const subFolder = folder.createFolder(fakeData.referenceId + " — " + fakeData.companyName + " (TEST)");
+
+    const row = [
+      fakeData.referenceId, fakeData.submittedAt, "TEST — Pending Review",
+      fakeData.companyName, fakeData.businessType, fakeData.registrationNo,
+      fakeData.gstNumber, fakeData.panNumber, fakeData.yearEstablished, fakeData.website,
+      fakeData.contactName, fakeData.designation, fakeData.email, fakeData.phone,
+      fakeData.altPhone, fakeData.address1, fakeData.address2, fakeData.city,
+      fakeData.state, fakeData.pinCode, fakeData.country,
+      fakeData.businessNature, fakeData.categories, fakeData.annualTurnover,
+      fakeData.employees, fakeData.certifications, fakeData.vendorCategory,
+      fakeData.bankName, fakeData.accountHolder, fakeData.accountNumber,
+      fakeData.ifscCode, fakeData.branchName, fakeData.accountType,
+      "No file (test)", "No file (test)", "No file (test)",
+    ];
+
+    sheet.appendRow(row);
+    Logger.log("✅ TEST ROW added to Google Sheet successfully!");
+    Logger.log("✅ TEST FOLDER created in Google Drive: " + subFolder.getName());
+    Logger.log("=== TEST PASSED — your backend is working correctly ===");
+    Logger.log("Now submit the real form on your website.");
+  } catch (err) {
+    Logger.log("❌ testPost failed: " + err.message);
+  }
+}
+
+
+/* ============================================================
+   SETUP FUNCTION
    ============================================================ */
 function testSetup() {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
